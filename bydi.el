@@ -112,11 +112,11 @@ functions when stacking `bydi--mock' forms."
     `(cl-letf* ((bydi--history ,(if history history '(bydi--make-table)))
                 (bydi--suspects (bydi--make-table))
 
-                (bydi--targets ',(bydi-mock--collect instructions :spy))
-                (bydi--wards ',(bydi-mock--collect instructions :watch))
+                (bydi--targets ',(bydi--collect instructions :spy))
+                (bydi--wards ',(bydi--collect instructions :watch))
 
                 (bydi--volatile ,(if volatile volatile '(bydi--make-table)))
-                (bydi--vars ',(bydi-mock--collect instructions :var))
+                (bydi--vars ',(bydi--collect instructions :var))
 
                 ,@(bydi-mock--create instructions))
 
@@ -125,40 +125,13 @@ functions when stacking `bydi--mock' forms."
            (progn
 
              (bydi--into-volatile
-              ',(bydi-mock--collect instructions :sometimes)
-              ',(bydi-mock--collect instructions :othertimes))
+              ',(bydi--collect instructions :sometimes)
+              ',(bydi--collect instructions :othertimes))
 
              (bydi--setup)
              ,@(bydi--safe-body body))
 
          (bydi--teardown)))))
-
-;;;;; Helpers
-
-(defvar bydi--keywords '(:history :volatile)
-  "List of keywords for `bydi--mock'.")
-
-(defun bydi--make-table ()
-  "Make a table."
-  (make-hash-table :test 'equal))
-
-(defun bydi--into-volatile (always ignore)
-  "Collect a list of volatile functions into TARGET.
-
-IGNORE are the functions to ignore, ALWAYS are the functions to always."
-  (let ((cur-always (gethash 'always bydi--volatile))
-        (cur-ignore (gethash 'ignore bydi--volatile)))
-
-    (puthash 'always (append cur-always always) bydi--volatile)
-    (puthash 'ignore (append cur-ignore ignore) bydi--volatile)))
-
-(defun bydi--safe-body (body)
-  "Collect everything from BODY that's not a key argument."
-  (cl-loop for (key val)
-           on body by 'cddr
-           unless (memq key bydi--keywords)
-           collect key
-           and if val collect val))
 
 (defun bydi--setup ()
   "Set up spies and watchers."
@@ -275,7 +248,7 @@ If CLEAR is t, clear the history of assignments to that variable."
 
     `(progn ,@(mapcar (lambda (it) `(should (,check ,it ,expected))) forms))))
 
-;;;; Helpers
+;;;; Convenience functions
 
 (defun bydi-return-first (a &rest _r)
   "Return first argument passed A."
@@ -313,6 +286,55 @@ The MESSAGE will be formatted with ARGS."
    'bydi
    (apply #'format message args)
    :warning))
+
+;;;; Helpers
+
+(defun bydi--make-table ()
+  "Make a table."
+  (make-hash-table :test 'equal))
+
+(defun bydi--into-volatile (always ignore)
+  "Collect a list of volatile functions into TARGET.
+
+IGNORE are the functions to ignore, ALWAYS are the functions to always."
+  (let ((cur-always (gethash 'always bydi--volatile))
+        (cur-ignore (gethash 'ignore bydi--volatile)))
+
+    (puthash 'always (append cur-always always) bydi--volatile)
+    (puthash 'ignore (append cur-ignore ignore) bydi--volatile)))
+
+(defvar bydi--keywords '(:history :volatile)
+  "List of keywords for `bydi--mock'.")
+
+(defun bydi--safe-body (body)
+  "Collect everything from BODY that's not a key argument."
+  (cl-loop for (key val)
+           on body by 'cddr
+           unless (memq key bydi--keywords)
+           collect key
+           and if val collect val))
+
+(defun bydi--collect (instructions prop)
+  "Collect PROP entries from INSTRUCTIONS."
+  (cl-loop for i in instructions
+           when (and (bydi-mock--valid-plistp i)
+                     (plist-member i prop))
+           collect (plist-get i prop)))
+
+(defun bydi-mock--valid-plistp (plist)
+  "Check if PLIST list a valid one."
+  (and (plistp plist)
+       (or (and (or (memq :mock plist) (memq :risky-mock plist))
+                (or (memq :return plist)
+                    (memq :with plist)
+                    (memq :var plist)))
+           (memq :fail plist)
+           (memq :spy plist)
+           (memq :watch plist)
+           (memq :always plist)
+           (memq :ignore plist)
+           (memq :sometimes plist)
+           (memq :othertimes plist))))
 
 ;;;; Verification
 
@@ -509,28 +531,6 @@ is used to build it."
         (lambda (&rest r)
           (interactive)
           (apply 'bydi--record (list ',fun r))))))))
-
-(defun bydi-mock--collect (instructions prop)
-  "Collect PROP entries from INSTRUCTIONS."
-  (cl-loop for i in instructions
-           when (and (bydi-mock--valid-plistp i)
-                     (plist-member i prop))
-           collect (plist-get i prop)))
-
-(defun bydi-mock--valid-plistp (plist)
-  "Check if PLIST list a valid one."
-  (and (plistp plist)
-       (or (and (or (memq :mock plist) (memq :risky-mock plist))
-                (or (memq :return plist)
-                    (memq :with plist)
-                    (memq :var plist)))
-           (memq :fail plist)
-           (memq :spy plist)
-           (memq :watch plist)
-           (memq :always plist)
-           (memq :ignore plist)
-           (memq :sometimes plist)
-           (memq :othertimes plist))))
 
 (defun bydi-mock--volatile (fun)
   "Return volatile value for FUN."
