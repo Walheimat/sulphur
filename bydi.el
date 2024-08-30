@@ -138,7 +138,7 @@ of this form."
 
 ;;;; Calling macros
 
-(defmacro bydi-was-called (fun &optional clear)
+(cl-defmacro bydi-was-called (fun &key clear)
   "Check if mocked FUN was called.
 
 If CLEAR is t, clear the history of calls of that function."
@@ -153,7 +153,7 @@ If CLEAR is t, clear the history of calls of that function."
   `(let ((actual (gethash ',fun bydi--history 'not-called)))
      (should (bydi-verify--was-not-called ',fun 'not-called actual))))
 
-(defmacro bydi-was-called-with (fun expected &optional clear)
+(cl-defmacro bydi-was-called-with (fun expected &key clear)
   "Check if FUN was called with EXPECTED.
 
 If CLEAR is t, clear the history of calls of that function."
@@ -185,7 +185,7 @@ If CLEAR is t, clear the history of calls of that function."
 
 ;;;; Setting macros
 
-(defmacro bydi-was-set-to (var to &optional clear)
+(cl-defmacro bydi-was-set-to (var to &key clear)
   "Check that VAR was set to TO.
 
 If CLEAR is t, clear the history of assignments to that variable."
@@ -211,7 +211,7 @@ If CLEAR is t, clear the history of assignments to that variable."
 
      (should (bydi-verify--was-set-n-times ',var ,expected actual))))
 
-(defmacro bydi-was-set (var &optional clear)
+(cl-defmacro bydi-was-set (var &key clear)
   "Check if VAR was set.
 
 If CLEAR is t, clear the history of assignments to that variable."

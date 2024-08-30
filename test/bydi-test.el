@@ -347,7 +347,7 @@
       (should (bydi-verify--was-called 'apply 'called actual))))
 
   (bydi-match-expansion
-   (bydi-was-called apply t)
+   (bydi-was-called apply :clear t)
    '(let ((actual (gethash 'apply bydi--history 'not-called)))
       (should (bydi-verify--was-called 'apply 'called actual))
       (bydi-clear-mocks-for 'apply))))
@@ -360,7 +360,7 @@
      (should (bydi-verify--was-called-with 'apply expected actual))))
 
   (bydi-match-expansion
-   (bydi-was-called-with apply '(a b c) t)
+   (bydi-was-called-with apply '(a b c) :clear t)
    '(let ((expected (bydi-verify--safe-exp '(a b c)))
           (actual (car-safe (gethash 'apply bydi--history))))
       (should (bydi-verify--was-called-with 'apply expected actual))
@@ -387,7 +387,7 @@
 (ert-deftest bydi-was--clearing-history ()
   (bydi (forward-line)
     (forward-line)
-    (bydi-was-called forward-line t)
+    (bydi-was-called forward-line :clear t)
     (bydi-was-not-called forward-line)))
 
 (ert-deftest bydi-verify--was-called-with--nil-matching ()
@@ -495,13 +495,13 @@
 
     (setq watched 'set)
 
-    (bydi-was-set-to watched 'set t)
+    (bydi-was-set-to watched 'set :clear t)
 
     (bydi-was-not-set watched)
 
     (setq watched 'set)
 
-    (bydi-was-set watched t)
+    (bydi-was-set watched :clear t)
 
     (bydi-was-not-set watched)))
 

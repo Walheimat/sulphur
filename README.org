@@ -310,8 +310,8 @@ for some easier chaining in some scenarios).
     (useful "Claire")
 
     ;; Check but then clear history for `message'.
-    (bydi-was-called-with message "Claire is useful" t)
-    (bydi-was-set-to useful-var 'claire t)
+    (bydi-was-called-with message "Claire is useful" :clear t)
+    (bydi-was-set-to useful-var 'claire :clear t)
 
     (useful "Jack")
 
