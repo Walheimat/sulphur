@@ -578,6 +578,34 @@
     (bydi-was-called forward-char)
     (bydi-was-called backward-char))))
 
+(ert-deftest bydi-mock--stacking-volatile ()
+  :tags '(mock)
+
+  (bydi--mock ((:sometimes buffer-live-p))
+
+    (should (buffer-live-p))
+
+    (bydi--mock ((:othertimes dired))
+
+      (should-not (dired))
+      (should-not (buffer-live-p))))
+
+  (let ((shared (bydi--make-table)))
+
+    (bydi--mock ((:sometimes buffer-live-p)) :volatile shared
+
+      (should (buffer-live-p))
+
+      (bydi--mock ((:othertimes dired)) :volatile shared
+
+        (should-not (dired))
+        (should (buffer-live-p))
+
+        (bydi-toggle-sometimes)
+
+        (should (dired))
+        (should-not (buffer-live-p))))))
+
 ;;; bydi-test.el ends here
 
 ;; Local Variables:

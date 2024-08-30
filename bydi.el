@@ -73,7 +73,7 @@ it.")
 
 ;;;; Macros
 
-(cl-defmacro bydi--mock (to-mock &rest body &key history &allow-other-keys)
+(cl-defmacro bydi--mock (to-mock &rest body &key history volatile &allow-other-keys)
   "Evaluate a form with mocks.
 
 TO-MOCK is a list of symbols to mock. These can be functions or
@@ -103,7 +103,8 @@ is in place. Any `bydi-was-*' verification macro needs to be part
 of this form.
 
 You can pass HISTORY to share histories when stacking `bydi--mock'
-invocations."
+invocations. You can also pass VOLATILE to allow toggling volatile
+functions when stacking `bydi--mock' forms."
   (declare (indent defun))
 
   (let ((instructions (if (listp to-mock) to-mock (list to-mock))))
@@ -114,7 +115,7 @@ invocations."
                 (bydi--targets ',(bydi-mock--collect instructions :spy))
                 (bydi--wards ',(bydi-mock--collect instructions :watch))
 
-                (bydi--volatile (bydi--make-table))
+                (bydi--volatile ,(if volatile volatile '(bydi--make-table)))
                 (bydi--vars ',(bydi-mock--collect instructions :var))
 
                 ,@(bydi-mock--create instructions))
@@ -132,7 +133,9 @@ invocations."
 
          (bydi--teardown)))))
 
-(defvar bydi--keywords '(:history)
+;;;;; Helpers
+
+(defvar bydi--keywords '(:history :volatile)
   "List of keywords for `bydi--mock'.")
 
 (defun bydi--make-table ()

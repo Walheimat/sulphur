@@ -415,3 +415,23 @@ You may stack =bydi= forms and share history between them using keyword =:histor
     (bydi-was-called forward-char)
     (bydi-was-called backward-char)))
 #+end_src
+
+You also may do this for volatile functions using keyword =:volatile= like so:
+
+#+begin_src emacs-lisp
+(let ((shared (bydi--make-table)))
+
+  (bydi ((:sometimes buffer-live-p)) :volatile shared
+
+    (should (buffer-live-p))
+
+    (bydi ((:othertimes dired)) :volatile shared
+
+      (should-not (dired))
+      (should (buffer-live-p))
+
+      (bydi-toggle-sometimes)
+
+      (should (dired))
+      (should-not (buffer-live-p)))))
+#+end_src
