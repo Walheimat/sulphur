@@ -396,3 +396,22 @@ Compares A and B."
 
     (should (indirect-string= "test" "test"))))
 #+end_src
+
+** Experimental
+
+You may stack =bydi= forms and share history between them using keyword =:history= like so:
+
+#+begin_src emacs-lisp
+;; Function `bydi--make-table' is used internally to create histories.
+(let ((shared (bydi--make-table)))
+
+  (bydi ((:always forward-char)) :history shared
+
+    (forward-char)
+
+    (bydi ((:always backward-char)) :history shared
+      (backward-char))
+
+    (bydi-was-called forward-char)
+    (bydi-was-called backward-char)))
+#+end_src

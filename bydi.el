@@ -73,7 +73,7 @@ it.")
 
 ;;;; Macros
 
-(defmacro bydi--mock (to-mock &rest body)
+(cl-defmacro bydi--mock (to-mock &rest body &key history &allow-other-keys)
   "Evaluate a form with mocks.
 
 TO-MOCK is a list of symbols to mock. These can be functions or
@@ -100,13 +100,16 @@ REPLACE.
 
 BODY is the form evaluated while the mocking, spying and watching
 is in place. Any `bydi-was-*' verification macro needs to be part
-of this form."
+of this form.
+
+You can pass HISTORY to share histories when stacking `bydi--mock'
+invocations."
   (declare (indent defun))
 
   (let ((instructions (if (listp to-mock) to-mock (list to-mock))))
 
-    `(cl-letf* ((bydi--history (make-hash-table :test 'equal))
-                (bydi--suspects (make-hash-table :test 'equal))
+    `(cl-letf* ((bydi--history ,(if history history '(bydi--make-table)))
+                (bydi--suspects (bydi--make-table))
 
                 (bydi--targets ',(bydi-mock--collect instructions :spy))
                 (bydi--wards ',(bydi-mock--collect instructions :watch))
@@ -121,9 +124,24 @@ of this form."
 
            (progn
              (bydi--setup)
-             ,@body)
+             ,@(bydi--safe-body body))
 
          (bydi--teardown)))))
+
+(defvar bydi--keywords '(:history)
+  "List of keywords for `bydi--mock'.")
+
+(defun bydi--make-table ()
+  "Make a table."
+  (make-hash-table :test 'equal))
+
+(defun bydi--safe-body (body)
+  "Collect everything from BODY that's not a key argument."
+  (cl-loop for (key val)
+           on body by 'cddr
+           unless (memq key bydi--keywords)
+           collect key
+           and if val collect val))
 
 (defun bydi--setup ()
   "Set up spies and watchers."

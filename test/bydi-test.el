@@ -22,8 +22,8 @@
    (bydi--mock (bydi-rf bydi-ra)
      (should (always)))
    `(cl-letf*
-        ((bydi--history (make-hash-table :test 'equal))
-         (bydi--suspects (make-hash-table :test 'equal))
+        ((bydi--history (bydi--make-table))
+         (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
          (bydi--always 'nil)
@@ -49,8 +49,8 @@
                     (format . (lambda (a &rest _args) a)))
      (should (always)))
    `(cl-letf*
-        ((bydi--history (make-hash-table :test 'equal))
-         (bydi--suspects (make-hash-table :test 'equal))
+        ((bydi--history (bydi--make-table))
+         (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
          (bydi--always 'nil)
@@ -81,8 +81,8 @@
                 (:fail forward-line :with user-error))
      (should (always)))
    `(cl-letf*
-        ((bydi--history (make-hash-table :test 'equal))
-         (bydi--suspects (make-hash-table :test 'equal))
+        ((bydi--history (bydi--make-table))
+         (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
          (bydi--always 'nil)
@@ -127,8 +127,8 @@
                 (:watch major-mode))
      (should (always)))
    `(cl-letf*
-        ((bydi--history (make-hash-table :test 'equal))
-         (bydi--suspects (make-hash-table :test 'equal))
+        ((bydi--history (bydi--make-table))
+         (bydi--suspects (bydi--make-table))
          (bydi--targets '(buffer-live-p derived-mode-p))
          (bydi--wards '(major-mode))
          (bydi--always 'nil)
@@ -153,8 +153,8 @@
                 (:sometimes derived-mode-p))
      (should (always)))
    `(cl-letf*
-        ((bydi--history (make-hash-table :test 'equal))
-         (bydi--suspects (make-hash-table :test 'equal))
+        ((bydi--history (bydi--make-table))
+         (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
          (bydi--always '(derived-mode-p))
@@ -186,8 +186,8 @@
    (bydi--mock bydi-rf
      (should (always)))
    `(cl-letf*
-        ((bydi--history (make-hash-table :test 'equal))
-         (bydi--suspects (make-hash-table :test 'equal))
+        ((bydi--history (bydi--make-table))
+         (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
          (bydi--always 'nil)
@@ -210,9 +210,8 @@
        (bydi--mock ((:ignore new-line))
          nil)
        '(cl-letf*
-            ((bydi--history
-              (make-hash-table :test 'equal))
-             (bydi--suspects (make-hash-table :test 'equal))
+            ((bydi--history (bydi--make-table))
+             (bydi--suspects (bydi--make-table))
              (bydi--targets 'nil)
              (bydi--wards 'nil)
              (bydi--always 'nil)
@@ -238,9 +237,8 @@
      (bydi--mock ((:mock ignore :return nil))
        nil)
      '(cl-letf*
-         ((bydi--history
-           (make-hash-table :test 'equal))
-          (bydi--suspects (make-hash-table :test 'equal))
+         ((bydi--history (bydi--make-table))
+          (bydi--suspects (bydi--make-table))
           (bydi--targets 'nil)
           (bydi--wards 'nil)
           (bydi--always 'nil)
@@ -262,7 +260,7 @@
     (bydi-was-called-with bydi--warn "Returning `nil' may lead to unexpected results")))
 
 (ert-deftest bydi-clear-mocks ()
-  (let ((bydi--history (make-hash-table :test 'equal)))
+  (let ((bydi--history (bydi--make-table)))
 
     (bydi--record 'test 'testing)
 
@@ -273,7 +271,7 @@
     (should (eq 0 (length (hash-table-keys bydi--history))))))
 
 (ert-deftest bydi-clear-mocks-for ()
-  (let ((bydi--history (make-hash-table :test 'equal)))
+  (let ((bydi--history (bydi--make-table)))
 
     (bydi--record 'test 'testing)
     (bydi--record 'check 'checking)
@@ -555,6 +553,30 @@
     (setq mock-var "testing")
 
     (should (string= (next-line) "testing"))))
+
+(ert-deftest bydi-mock--stacking-bydis ()
+  :tags '(mock)
+
+  (bydi ((:always forward-char))
+
+    (forward-char)
+
+    (bydi ((:always backward-char))
+      (backward-char))
+
+    (bydi-was-called forward-char)
+    (bydi-was-not-called backward-char))
+
+  (let ((shared (bydi--make-table)))
+    (bydi ((:always forward-char)) :history shared
+
+      (forward-char)
+
+      (bydi ((:always backward-char)) :history shared
+        (backward-char))
+
+    (bydi-was-called forward-char)
+    (bydi-was-called backward-char))))
 
 ;;; bydi-test.el ends here
 
