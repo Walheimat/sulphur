@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.0](https://github.com/Walheimat/bydi/compare/v0.7.0...v0.8.0) (2024-08-30)
+
+
+### Features
+
+* **calling-macros:** use keyword argument for clear ([a4a3a3d](https://github.com/Walheimat/bydi/commit/a4a3a3dd7338b8f9f82bfca8b086b5cc703ff7aa))
+* **mock:** allow sharing history between bydi forms ([4409d4a](https://github.com/Walheimat/bydi/commit/4409d4a1281dfe5da32d5bf67eeb81e662a768ed))
+* **volatile:** allow sharing volatility ([e69c82d](https://github.com/Walheimat/bydi/commit/e69c82dbd35caf1f8dc073796b3dac3045a5b824))
+
 ## [0.7.0](https://github.com/Walheimat/bydi/compare/v0.6.5...v0.7.0) (2024-03-01)
 
 
