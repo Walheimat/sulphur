@@ -26,8 +26,7 @@
          (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
-         (bydi--always 'nil)
-         (bydi--ignore 'nil)
+         (bydi--volatile (bydi--make-table))
          (bydi--vars 'nil)
          ((symbol-function 'bydi-rf)
           (lambda (&rest r)
@@ -39,6 +38,7 @@
             (apply 'bydi--record (list 'bydi-ra r)))))
       (unwind-protect
           (progn
+            (bydi--into-volatile 'nil 'nil)
             (bydi--setup)
             (should (always)))
         (bydi--teardown)))))
@@ -53,8 +53,7 @@
          (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
-         (bydi--always 'nil)
-         (bydi--ignore 'nil)
+         (bydi--volatile (bydi--make-table))
          (bydi--vars 'nil)
          ((symbol-function 'bydi-rt)
           (lambda (&rest r)
@@ -68,6 +67,7 @@
             (apply (lambda (a &rest _args) a) r))))
       (unwind-protect
           (progn
+            (bydi--into-volatile 'nil 'nil)
             (bydi--setup)
             (should (always)))
         (bydi--teardown)))))
@@ -85,8 +85,7 @@
          (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
-         (bydi--always 'nil)
-         (bydi--ignore 'nil)
+         (bydi--volatile (bydi--make-table))
          (bydi--vars 'nil)
          ((symbol-function 'substring)
           (lambda (&rest r)
@@ -115,6 +114,7 @@
             (apply #'user-error '("User error")))))
       (unwind-protect
           (progn
+            (bydi--into-volatile 'nil 'nil)
             (bydi--setup)
             (should (always)))
         (bydi--teardown)))))
@@ -131,8 +131,7 @@
          (bydi--suspects (bydi--make-table))
          (bydi--targets '(buffer-live-p derived-mode-p))
          (bydi--wards '(major-mode))
-         (bydi--always 'nil)
-         (bydi--ignore 'nil)
+         (bydi--volatile (bydi--make-table))
          (bydi--vars 'nil)
          ((symbol-function 'abbrev-table-p)
           (lambda (&rest r)
@@ -142,6 +141,7 @@
 
       (unwind-protect
           (progn
+            (bydi--into-volatile 'nil 'nil)
             (bydi--setup)
             (should (always)))
         (bydi--teardown)))))
@@ -157,8 +157,7 @@
          (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
-         (bydi--always '(derived-mode-p))
-         (bydi--ignore 'nil)
+         (bydi--volatile (bydi--make-table))
          (bydi--vars 'nil)
          ((symbol-function 'buffer-live-p)
           (lambda (&rest r)
@@ -177,6 +176,7 @@
             (funcall #'bydi-mock--volatile 'derived-mode-p))))
       (unwind-protect
           (progn
+            (bydi--into-volatile '(derived-mode-p) 'nil)
             (bydi--setup)
             (should (always)))
         (bydi--teardown)))))
@@ -190,8 +190,7 @@
          (bydi--suspects (bydi--make-table))
          (bydi--targets 'nil)
          (bydi--wards 'nil)
-         (bydi--always 'nil)
-         (bydi--ignore 'nil)
+         (bydi--volatile (bydi--make-table))
          (bydi--vars 'nil)
          ((symbol-function 'bydi-rf)
           (lambda (&rest r)
@@ -199,6 +198,7 @@
             (apply 'bydi--record (list 'bydi-rf r)))))
       (unwind-protect
           (progn
+            (bydi--into-volatile 'nil 'nil)
             (bydi--setup)
             (should (always)))
         (bydi--teardown)))))
@@ -214,8 +214,7 @@
              (bydi--suspects (bydi--make-table))
              (bydi--targets 'nil)
              (bydi--wards 'nil)
-             (bydi--always 'nil)
-             (bydi--ignore 'nil)
+             (bydi--volatile (bydi--make-table))
              (bydi--vars 'nil)
              ((symbol-function 'new-line)
               (lambda
@@ -226,6 +225,7 @@
                 (apply #'ignore r))))
           (unwind-protect
               (progn
+                (bydi--into-volatile 'nil 'nil)
                 (bydi--setup)
                 nil)
             (bydi--teardown)))))
@@ -241,8 +241,7 @@
           (bydi--suspects (bydi--make-table))
           (bydi--targets 'nil)
           (bydi--wards 'nil)
-          (bydi--always 'nil)
-          (bydi--ignore 'nil)
+          (bydi--volatile (bydi--make-table))
           (bydi--vars 'nil)
           ((symbol-function 'ignore)
            (lambda
@@ -253,6 +252,7 @@
              nil)))
         (unwind-protect
             (progn
+              (bydi--into-volatile 'nil 'nil)
               (bydi--setup)
               nil)
           (bydi--teardown))))
@@ -293,18 +293,18 @@
 
 (ert-deftest bydi-toggle-sometimes ()
   (bydi ((:sometimes buffer-live-p)
-         (:othertimes hash-table-p)
+         (:othertimes dired)
          (:always y-or-n-p)
          (:spy bydi-clear-mocks-for))
 
     (should (buffer-live-p))
-    (should-not (hash-table-p))
+    (should-not (dired))
     (should (y-or-n-p))
 
     (bydi-toggle-sometimes)
 
     (should-not (buffer-live-p))
-    (should (hash-table-p))
+    (should (dired))
 
     (should (gethash 'y-or-n-p bydi--history))
 
@@ -319,23 +319,23 @@
 
 (ert-deftest bydi-toggle-volatile ()
   (bydi ((:sometimes buffer-live-p)
-         (:sometimes hash-table-p)
+         (:sometimes dired)
          (:othertimes y-or-n-p))
 
     (should (buffer-live-p))
-    (should (hash-table-p))
+    (should (dired))
     (should-not (y-or-n-p))
 
-    (bydi-toggle-volatile 'hash-table-p)
+    (bydi-toggle-volatile 'dired)
 
     (should (buffer-live-p))
-    (should-not (hash-table-p))
+    (should-not (dired))
     (should-not (y-or-n-p))
 
     (bydi-toggle-volatile 'y-or-n-p)
 
     (should (buffer-live-p))
-    (should-not (hash-table-p))
+    (should-not (dired))
     (should (y-or-n-p))))
 
 (ert-deftest bydi-was-called ()

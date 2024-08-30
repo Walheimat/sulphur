@@ -44,8 +44,8 @@ assignment results.")
 (defvar bydi--suspects nil
   "Hash table of selective mocking of spies.")
 
-(defvar bydi--always nil
-  "List of functions that will return t when called.
+(defvar bydi--volatile nil
+  "Hash map of functions that should return t or nil when called.
 
 Can be toggled using `bydi-toggle-volatile' or
 `bydi-toggle-sometimes'.")
@@ -114,8 +114,7 @@ invocations."
                 (bydi--targets ',(bydi-mock--collect instructions :spy))
                 (bydi--wards ',(bydi-mock--collect instructions :watch))
 
-                (bydi--always ',(bydi-mock--collect instructions :sometimes))
-                (bydi--ignore ',(bydi-mock--collect instructions :othertimes))
+                (bydi--volatile (bydi--make-table))
                 (bydi--vars ',(bydi-mock--collect instructions :var))
 
                 ,@(bydi-mock--create instructions))
@@ -123,6 +122,11 @@ invocations."
        (unwind-protect
 
            (progn
+
+             (bydi--into-volatile
+              ',(bydi-mock--collect instructions :sometimes)
+              ',(bydi-mock--collect instructions :othertimes))
+
              (bydi--setup)
              ,@(bydi--safe-body body))
 
@@ -134,6 +138,16 @@ invocations."
 (defun bydi--make-table ()
   "Make a table."
   (make-hash-table :test 'equal))
+
+(defun bydi--into-volatile (always ignore)
+  "Collect a list of volatile functions into TARGET.
+
+IGNORE are the functions to ignore, ALWAYS are the functions to always."
+  (let ((cur-always (gethash 'always bydi--volatile))
+        (cur-ignore (gethash 'ignore bydi--volatile)))
+
+    (puthash 'always (append cur-always always) bydi--volatile)
+    (puthash 'ignore (append cur-ignore ignore) bydi--volatile)))
 
 (defun bydi--safe-body (body)
   "Collect everything from BODY that's not a key argument."
@@ -517,7 +531,7 @@ is used to build it."
 
 (defun bydi-mock--volatile (fun)
   "Return volatile value for FUN."
-  (and (memq fun bydi--always) t))
+  (and (memq fun (bydi--always)) t))
 
 (defun bydi-mock--caution-about-risky-mocks (fun instruction)
   "Caution if FUN is a risky mock but not tagged as such.
@@ -680,8 +694,17 @@ SYMBOL can be the name of a function or a variable."
 
 Unless NO-CLEAR is t, this also calls `bydi-clear-mocks-for' for
 all functions."
-  (dolist (it (append bydi--always bydi--ignore))
+  (dolist (it (append (bydi--always) (bydi--ignore)))
+
     (bydi-toggle-volatile it no-clear)))
+
+(defun bydi--always ()
+  "Get volatile functions that return t."
+  (gethash 'always bydi--volatile))
+
+(defun bydi--ignore ()
+  "Get volatile functions that return nil."
+  (gethash 'ignore bydi--volatile))
 
 (defun bydi-toggle-volatile (fun &optional no-clear)
   "Toggle volatile FUN.
@@ -692,14 +715,15 @@ and vice versa.
 Unless NO-CLEAR is t, this also calls `bydi-clear-mocks' for this
 function."
   (cond
-   ((memq fun bydi--always)
+   ((memq fun (bydi--always))
 
-    (setq bydi--always (delete fun bydi--always))
-    (push fun bydi--ignore))
-   ((memq fun bydi--ignore)
+    (puthash 'always (delq fun (bydi--always)) bydi--volatile)
+    (puthash 'ignore (append (bydi--ignore) (list fun)) bydi--volatile))
 
-    (setq bydi--ignore (delete fun bydi--ignore))
-    (push fun bydi--always)))
+   ((memq fun (bydi--ignore))
+
+    (puthash 'always (append (bydi--always) (list fun)) bydi--volatile)
+    (puthash 'ignore (delq fun (bydi--ignore)) bydi--volatile)))
 
   (unless no-clear
     (bydi-clear-mocks-for fun)))
