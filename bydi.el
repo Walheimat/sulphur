@@ -33,60 +33,43 @@
 ;;;; Variables
 
 (defvar bydi--history nil
-  "An alist of the form (SYMBOL . (ARGS-1 ARGS-2 ...)).
+  "A hash table mapping symbols to invocations/settings.
 
-For functions, each ARGS is a list of the arguments it was called
-with. For variables, it's the values it was set to.
+For functions, each value is a list of the arguments it was called with.
+For variables, it's the values it was set to.
 
-The verification functions use this list to inspect invocation
-and assignment results.")
+The verification functions use this table to inspect invocation and
+assignment results.")
 
-(defvar bydi-mock--risky '(fboundp advice-add advice-remove file-exists-p)
-  "List of risky functions.
+(defvar bydi--suspects nil
+  "Hash table of selective mocking of spies.")
 
-These are functions that, when mocked, do or may prevent test
-execution.")
-
-(defvar bydi-mock--always nil
+(defvar bydi--always nil
   "List of functions that will return t when called.
 
 Can be toggled using `bydi-toggle-volatile' or
 `bydi-toggle-sometimes'.")
 
-(defvar bydi-mock--ignore nil
+(defvar bydi--ignore nil
   "List of functions that will return nil when called.
 
 Can be toggled using `bydi-toggle-volatile' or
 `bydi-toggle-sometimes'.")
 
-(defvar bydi-mock--vars nil
+(defvar bydi--vars nil
   "List of variables created for mocks using `:var'.")
 
-(defvar bydi-expect--elision '\...
-  "Symbol indicating an elision during argument verification.
-
-Allows verifying only those arguments passed to a mocked function
-that are of interest.")
-
-(defvar bydi-spy--spies nil
+(defvar bydi--targets nil
   "List of functions spied upon during `bydi--mock'.
 
 Each function will be advised to record the arguments it was
 called with.")
 
-(defvar bydi-spy--advice-name 'bydi-spi
-  "Name used for the advising of spied upon functions.
-
-Allows removing anonymous advice.")
-
-(defvar bydi-watch--watchers nil
+(defvar bydi--wards nil
   "List of variables watched during `bydi--mock'.
 
 Each variable will be watched to record the values assigned to
 it.")
-
-(defvar bydi--when nil
-  "Hash table of selective mocking of spies.")
 
 ;;;; Macros
 
@@ -123,16 +106,16 @@ of this form."
   (let ((instructions (if (listp to-mock) to-mock (list to-mock))))
 
     `(cl-letf* ((bydi--history (make-hash-table :test 'equal))
-                (bydi--when (make-hash-table :test 'equal))
+                (bydi--suspects (make-hash-table :test 'equal))
 
-                (bydi-spy--spies ',(bydi-mock--collect instructions :spy))
-                (bydi-watch--watchers ',(bydi-mock--collect instructions :watch))
+                (bydi--targets ',(bydi-mock--collect instructions :spy))
+                (bydi--wards ',(bydi-mock--collect instructions :watch))
 
-                (bydi-mock--always ',(bydi-mock--collect instructions :sometimes))
-                (bydi-mock--ignore ',(bydi-mock--collect instructions :othertimes))
-                (bydi-mock--vars ',(bydi-mock--collect instructions :var))
+                (bydi--always ',(bydi-mock--collect instructions :sometimes))
+                (bydi--ignore ',(bydi-mock--collect instructions :othertimes))
+                (bydi--vars ',(bydi-mock--collect instructions :var))
 
-                ,@(bydi-mock--mocks instructions))
+                ,@(bydi-mock--create instructions))
 
        (unwind-protect
 
@@ -141,6 +124,17 @@ of this form."
              ,@body)
 
          (bydi--teardown)))))
+
+(defun bydi--setup ()
+  "Set up spies and watchers."
+  (bydi-spy--create)
+  (bydi-watch--create))
+
+(defun bydi--teardown ()
+  "Tear down spies and watchers."
+  (bydi-spy--clear)
+  (bydi-watch--clear)
+  (bydi-mock--clear-vars))
 
 ;;;; Calling macros
 
@@ -265,24 +259,16 @@ If CLEAR is t, clear the history of assignments to that variable."
 
 ;;;; Handlers
 
-(defun bydi--record (sym args)
-  "Record SYM and return ARGS."
-  (let* ((prev (gethash sym bydi--history))
-         (val (if prev (push args prev) (list args))))
+(defun bydi--record (sym artifact)
+  "Record ARTIFACT for SYM.
 
-    (puthash sym val bydi--history)
-    args))
+The artifact is also returned."
+  (let* ((existing (gethash sym bydi--history))
+         (history (if existing (push artifact existing) (list artifact))))
 
-(defun bydi--setup ()
-  "Set up spies and watchers."
-  (bydi-spy--create)
-  (bydi-watch--create))
+    (puthash sym history bydi--history)
 
-(defun bydi--teardown ()
-  "Tear down spies and watchers."
-  (bydi-spy--clear)
-  (bydi-watch--clear)
-  (bydi-mock--clear))
+    artifact))
 
 (defun bydi--warn (message &rest args)
   "Emit a warning.
@@ -295,6 +281,12 @@ The MESSAGE will be formatted with ARGS."
 
 ;;;; Verification
 
+(defvar bydi-verify--elision '\...
+  "Symbol indicating an elision during argument verification.
+
+Allows verifying only those arguments passed to a mocked function
+that are of interest.")
+
 (defun bydi-verify--was-called (_fun _expected actual)
   "Verify that ACTUAL represents a function call."
   (not (equal 'not-called actual)))
@@ -306,13 +298,13 @@ The MESSAGE will be formatted with ARGS."
 (defun bydi-verify--was-called-with (_fun expected actual)
   "Verify that EXPECTED represents ACTUAL arguments.
 
-If the EXPECTED value start with `bydi-expect--elision', the check only
+If the EXPECTED value start with `bydi-verify--elision', the check only
 extends to verifying that expected argument is in expected
 arguments in the order given."
   (let ((safe-exp (bydi-verify--safe-exp expected)))
 
     (cond
-     ((memq bydi-expect--elision safe-exp)
+     ((memq bydi-verify--elision safe-exp)
       (let ((args safe-exp)
             (matches t)
             (last-match -1))
@@ -321,7 +313,7 @@ arguments in the order given."
           (let* ((it (car args))
                  (this-match (seq-position actual it)))
 
-            (unless (eq it bydi-expect--elision)
+            (unless (eq it bydi-verify--elision)
               (if (and this-match
                        (> this-match last-match))
                   (setq last-match this-match)
@@ -379,17 +371,23 @@ This is done by checking that ACTUAL is not the symbol `not-set'."
 
 ;;;; Mocking
 
-(defun bydi-mock--mocks (instructions)
+(defvar bydi-mock--risky '(fboundp advice-add advice-remove file-exists-p)
+  "List of risky functions.
+
+These are functions that, when mocked, do or may prevent test
+execution.")
+
+(defun bydi-mock--create (instructions)
   "Get mocks for INSTRUCTIONS."
   (cl-loop for instruction in instructions
-           for bindings = (cl-destructuring-bind (bind type composite) (bydi-mock--binding instruction)
+           for bindings = (cl-destructuring-bind (bind type composite) (bydi-mock--template instruction)
                             (when bind
-                              (bydi-mock--check bind instruction)
-                              (bydi-mock--bind bind type composite)))
+                              (bydi-mock--caution-about-risky-mocks bind instruction)
+                              (bydi-mock--mock-implementation bind type composite)))
            if bindings
            nconc bindings))
 
-(defun bydi-mock--binding (mock)
+(defun bydi-mock--template (mock)
   "Get function and binding for MOCK."
   (cond
    ((bydi-mock--valid-plistp mock)
@@ -448,8 +446,8 @@ This is done by checking that ACTUAL is not the symbol `not-set'."
 
    (t `(,mock default nil))))
 
-(defun bydi-mock--bind (fun type &optional composite)
-  "Return template to override FUN.
+(defun bydi-mock--mock-implementation (fun type &optional composite)
+  "Return the mock implementation of FUN.
 
 TYPE determines the composition of the mock function. COMPOSITE
 is used to build it."
@@ -500,21 +498,29 @@ is used to build it."
            (memq :othertimes plist))))
 
 (defun bydi-mock--volatile (fun)
-  "Check if FUN should return t."
-  (and (memq fun bydi-mock--always) t))
+  "Return volatile value for FUN."
+  (and (memq fun bydi--always) t))
 
-(defun bydi-mock--check (fun instruction)
-  "Verify binding FUN using INSTRUCTION."
+(defun bydi-mock--caution-about-risky-mocks (fun instruction)
+  "Caution if FUN is a risky mock but not tagged as such.
+
+This is done by inspecing if INSTRUCTION is using `:risky-mock' for
+risky mocks."
   (when (and (memq fun bydi-mock--risky)
              (not (memq :risky-mock instruction)))
 
     (bydi--warn "Mocking `%s' may lead to issues" fun)))
 
-(defun bydi-mock--clear ()
+(defun bydi-mock--clear-vars ()
   "Unintern interned variables."
-  (mapc (lambda (it) (unintern it nil)) bydi-mock--vars))
+  (mapc (lambda (it) (unintern it nil)) bydi--vars))
 
 ;;;; Spying
+
+(defvar bydi-spy--advice-name 'bydi-spy
+  "Name used for the advising of spied upon functions.
+
+Allows removing anonymous advice.")
 
 (defun bydi-spy--create ()
   "Record invocations of FUN in history."
@@ -525,44 +531,44 @@ is used to build it."
 
              (apply 'bydi--record (list it args))
 
-             (or (apply 'bydi-spy--when (append (list it) args))
+             (or (apply 'bydi-spy--capture-when (append (list it) args))
                  (apply fun args)))
            (list (cons 'name bydi-spy--advice-name))))
-        bydi-spy--spies))
+        bydi--targets))
 
 (defun bydi-spy--clear ()
   "Clear all spies."
-  (mapc (lambda (it) (advice-remove it bydi-spy--advice-name)) bydi-spy--spies))
+  (mapc (lambda (it) (advice-remove it bydi-spy--advice-name)) bydi--targets))
 
-(defun bydi-spy--when (fun &rest args)
+(defun bydi-spy--capture-when (fun &rest args)
   "Maybe return recorded value for FUN.
 
 If ARGS match the the IN field of the recorded value, the value
 of OUT will be returned. If it was recorded with ONCE being t,
 the recording is removed before returning the OUT value."
-  (and-let* ((condition (gethash fun bydi--when))
+  (and-let* ((condition (gethash fun bydi--suspects))
              ((equal args (plist-get condition :called-with))))
 
     (when-let (rem (plist-get condition :once))
-      (remhash fun bydi--when))
+      (remhash fun bydi--suspects))
 
     (plist-get condition :then-return)))
 
-(cl-defmacro bydi-when--answer (fun &key called-with then-return once)
+(cl-defmacro bydi-spy--define-when (fun &key called-with then-return once)
   "Return THEN-RETURN when FUN is called with CALLED-WITH.
 
 If ONCE is to, only do this once."
   `(progn
-     (unless (memq ',fun bydi-spy--spies)
+     (unless (memq ',fun bydi--targets)
        (bydi--warn "No spy for `%s' was recorded" ',fun))
      (puthash
       ',fun
       (list :called-with ,called-with :then-return ,then-return :once ,once)
-      bydi--when)))
+      bydi--suspects)))
 
 ;;;; Watching
 
-(defun bydi-watch--watcher (symbol newval operation _where)
+(defun bydi-watch--watch-variable (symbol newval operation _where)
   "Record that SYMBOL was updated with NEWVAL.
 
 Only records when OPERATION is a let or set binding."
@@ -572,16 +578,18 @@ Only records when OPERATION is a let or set binding."
 (defun bydi-watch--create ()
   "Record settings of symbols."
   (mapc (lambda (it)
-          (add-variable-watcher it #'bydi-watch--watcher))
-        bydi-watch--watchers))
+          (add-variable-watcher it #'bydi-watch--watch-variable))
+        bydi--wards))
 
 (defun bydi-watch--clear ()
   "Clear watchers."
   (mapc
-   (lambda (it) (remove-variable-watcher it #'bydi-watch--watcher))
-   bydi-watch--watchers))
+   (lambda (it) (remove-variable-watcher it #'bydi-watch--watch-variable))
+   bydi--wards))
 
 ;;;; Explaining
+;;
+;; These functions deal with explaining why a `bydi' assertion failed.
 
 (defun bydi-explain--wrong-call (fun expected actual)
   "Explain that FUN was called with ACTUAL not EXPECTED."
@@ -654,7 +662,7 @@ SYMBOL can be the name of a function or a variable."
 
 Unless NO-CLEAR is t, this also calls `bydi-clear-mocks-for' for
 all functions."
-  (dolist (it (append bydi-mock--always bydi-mock--ignore))
+  (dolist (it (append bydi--always bydi--ignore))
     (bydi-toggle-volatile it no-clear)))
 
 (defun bydi-toggle-volatile (fun &optional no-clear)
@@ -666,14 +674,14 @@ and vice versa.
 Unless NO-CLEAR is t, this also calls `bydi-clear-mocks' for this
 function."
   (cond
-   ((memq fun bydi-mock--always)
+   ((memq fun bydi--always)
 
-    (setq bydi-mock--always (delete fun bydi-mock--always))
-    (push fun bydi-mock--ignore))
-   ((memq fun bydi-mock--ignore)
+    (setq bydi--always (delete fun bydi--always))
+    (push fun bydi--ignore))
+   ((memq fun bydi--ignore)
 
-    (setq bydi-mock--ignore (delete fun bydi-mock--ignore))
-    (push fun bydi-mock--always)))
+    (setq bydi--ignore (delete fun bydi--ignore))
+    (push fun bydi--always)))
 
   (unless no-clear
     (bydi-clear-mocks-for fun)))
@@ -684,7 +692,7 @@ function."
 ;;;###autoload
 (defalias 'bydi-with-mock 'bydi--mock)
 
-(defalias 'bydi-when 'bydi-when--answer)
+(defalias 'bydi-when 'bydi-spy--define-when)
 
 (provide 'bydi)
 
