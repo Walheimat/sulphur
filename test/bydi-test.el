@@ -354,13 +354,15 @@
   (bydi-match-expansion
    (bydi-was-called-with apply '(a b c))
    '(let ((expected (bydi-verify--safe-exp '(a b c)))
-          (actual (car-safe (gethash 'apply bydi--history))))
+          (actual (or (car-safe (gethash 'apply bydi--history))
+                      'not-called)))
      (should (bydi-verify--was-called-with 'apply expected actual))))
 
   (bydi-match-expansion
    (bydi-was-called-with apply '(a b c) :clear t)
    '(let ((expected (bydi-verify--safe-exp '(a b c)))
-          (actual (car-safe (gethash 'apply bydi--history))))
+          (actual (or (car-safe (gethash 'apply bydi--history))
+                      'not-called)))
       (should (bydi-verify--was-called-with 'apply expected actual))
       (bydi-clear-mocks-for 'apply))))
 
@@ -368,7 +370,8 @@
   (bydi-match-expansion
    (bydi-was-called-with apply "test")
    '(let ((expected (bydi-verify--safe-exp "test"))
-          (actual (car-safe (gethash 'apply bydi--history))))
+          (actual (or (car-safe (gethash 'apply bydi--history))
+                      'not-called)))
       (should (bydi-verify--was-called-with 'apply expected actual)))))
 
 (ert-deftest bydi-was-called-with--partial-matching ()
@@ -380,6 +383,7 @@
     (should (bydi-verify--was-called-with nil '(... b d) actual))
     (should (bydi-verify--was-called-with nil '(a ... d) actual))
     (should (bydi-verify--was-called-with nil '(... c) actual))
+    (should-not (bydi-verify--was-called-with nil nil 'not-called))
     (should-not (bydi-verify--was-called-with nil '(... b a) actual))))
 
 (ert-deftest bydi-was--clearing-history ()
@@ -395,21 +399,24 @@
   (bydi-match-expansion
    (bydi-was-called-nth-with apply 'test 1)
    '(let ((expected (bydi-verify--safe-exp 'test))
-          (actual (nth 1 (reverse (gethash 'apply bydi--history)))))
+          (actual (or (nth 1 (reverse (gethash 'apply bydi--history)))
+                      'not-called)))
       (should (bydi-verify--was-called-with 'apply expected actual)))))
 
 (ert-deftest bydi-was-called-nth-with--single-item ()
   (bydi-match-expansion
    (bydi-was-called-nth-with apply "test" 1)
    '(let ((expected (bydi-verify--safe-exp "test"))
-          (actual (nth 1 (reverse (gethash 'apply bydi--history)))))
+          (actual (or (nth 1 (reverse (gethash 'apply bydi--history)))
+                      'not-called)))
       (should (bydi-verify--was-called-with 'apply expected actual)))))
 
 (ert-deftest bydi-was-called-last-with ()
   (bydi-match-expansion
    (bydi-was-called-last-with apply 'test)
    '(let ((expected (bydi-verify--safe-exp 'test))
-          (actual (car-safe (last (reverse (gethash 'apply bydi--history))))))
+          (actual (or (car-safe (last (reverse (gethash 'apply bydi--history))))
+                      'not-called)))
       (should (bydi-verify--was-called-with 'apply expected actual)))))
 
 (ert-deftest bydi-was-not-called ()

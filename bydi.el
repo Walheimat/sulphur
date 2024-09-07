@@ -168,7 +168,8 @@ If CLEAR is t, clear the history of calls of that function."
   (declare (indent defun))
 
   `(let ((expected (bydi-verify--safe-exp ,expected))
-         (actual (car-safe (gethash ',fun bydi--history))))
+         (actual (or (car-safe (gethash ',fun bydi--history))
+                     'not-called)))
      ,@(delq
         nil
         `((should (bydi-verify--was-called-with ',fun expected actual))
@@ -177,13 +178,15 @@ If CLEAR is t, clear the history of calls of that function."
 (defmacro bydi-was-called-nth-with (fun expected index)
   "Check if FUN was called with EXPECTED on the INDEXth call."
   `(let ((expected (bydi-verify--safe-exp ,expected))
-         (actual (nth ,index (reverse (gethash ',fun bydi--history)))))
+         (actual (or (nth ,index (reverse (gethash ',fun bydi--history)))
+                     'not-called)))
      (should (bydi-verify--was-called-with ',fun expected actual))))
 
 (defmacro bydi-was-called-last-with (fun expected)
   "Check if FUN was called with EXPECTED on the last call."
   `(let ((expected (bydi-verify--safe-exp ,expected))
-         (actual (car-safe (last (reverse (gethash ',fun bydi--history))))))
+         (actual (or (car-safe (last (reverse (gethash ',fun bydi--history))))
+                     'not-called)))
      (should (bydi-verify--was-called-with ',fun expected actual))))
 
 (defmacro bydi-was-called-n-times (fun expected)
@@ -377,7 +380,8 @@ arguments in the order given."
                 (setq matches nil)))
             (setq args (cdr args))))
         matches))
-     ((eq (length safe-exp) (length actual))
+     ((and (sequencep actual)
+           (eq (length safe-exp) (length actual)))
       (equal safe-exp actual))
      ((null expected)
       (null actual))
@@ -633,6 +637,9 @@ Only records when OPERATION is a let or set binding."
     `(was-called ',fun :args ,actual))
 
    ((eq expected 'called)
+    `(never-called ',fun))
+
+   ((eq actual 'not-called)
     `(never-called ',fun))
 
    (t
