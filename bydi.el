@@ -73,41 +73,64 @@ it.")
 
 ;;;; Macros
 
-(cl-defmacro bydi--mock (to-mock &rest body &key history volatile &allow-other-keys)
-  "Evaluate a form with mocks.
+(cl-defmacro bydi--mock (instructions
+                         &rest form
+                         &key history volatile
+                         &allow-other-keys)
+  "Evaluate FORM while instructed symbols behave predictably.
 
-TO-MOCK is a list of symbols to mock. These can be functions or
-variables. It maybe be a single item or a list of items.
+INSTRUCTIONS is a list of definitions that ensure that desired symbols
+are temporarily rebound and remain under observation. Each definition is
+a plist describing the desired action. All symbols instructed this way
+can be used in assertions.
 
-The arguments passed to the mocked functions or assigned to the
-watched variables are recorded in a hash table. Repeated calls or
-assignments will append results.
+The most common use for this is mocking function invocations. They may
+also be spied upon. You may also watch variables.
 
-Each item in TO-MOCK can either be a function symbol returning
-the result of `bydi--record', a plist of shape (:mock FUN :with
-REPLACE) returning the result of calling REPLACE, a plist of
-shape (:mock FUN :return VAL) returning VAL, a plist of
-shape (:ignore FUN) that will replace FUN with `ignore', a plist
-of shape (:always FUN) that will replace FUN with `always', a
-plist of shape (:sometimes FUN) that will return t unless
-`bydi-mock-toggle-volatile' is called , a plist of
-shape (:othertimes FUN) that will do the inverse, a plist of
-shape (:spy FUN) that will advise FUN so that its invocations are
-recorded with its routine untouched, a plist of shape (:watch
-VAR) that will watch VAR so assignments are recorded, or a cons
-cell of shape (FUN . REPLACE) returning the result of calling
-REPLACE.
+Within FORM you may now make assertions of the type `bydi-was-*' to
+inspect the behavior.
 
-BODY is the form evaluated while the mocking, spying and watching
-is in place. Any `bydi-was-*' verification macro needs to be part
-of this form.
+The following instructions are possible:
+
+Plist (:mock FUN :with REPLACE) which means that when FUN is called,
+REPLACE is called instead. The same effect can be done by using a cons
+cell (FUN . REPLACE) which is discouraged. For functions that shouldn't
+be mocked you can use (:risky-mock FUN) to suppress the warning.
+
+Plist (:mock FUN :return VAL) which means that when FUN is called, VAL
+is returned.
+
+Plist (:mock FUN :var VAR) which means that when FUN is called, the
+value of VAR is returned. The variable VAR will be created. Its initial
+value can be set using (:initial INITIAL-VAL).
+
+Plist (:always FUN) which means that FUN will always return t.
+
+Plist (:ignore FUN) which means that FUN will return nil.
+
+Plist (:sometimes FUN) which means that FUN will return t until it is
+toggled.
+
+Plist (:othertimes FUN) which means that FUN will return nil until it is
+toggled.
+
+Plist (:spy FUN) which means that invocations of FUN can be inspected
+the same way a mock could without replacing the implementation.
+
+Plist (:fail FUN :with SIGNAL) which means that invocations of FUN will
+throw. This can be further refined by using (:args ARGS) that will
+ensure the signaling function is called with ARGS.
+
+Plist (:watch VAR) which means that settings of VAR can be inspected.
 
 You can pass HISTORY to share histories when stacking `bydi--mock'
-invocations. You can also pass VOLATILE to allow toggling volatile
-functions when stacking `bydi--mock' forms."
+invocations.
+
+You can also pass VOLATILE to allow toggling volatile functions when
+stacking `bydi--mock' forms."
   (declare (indent defun))
 
-  (let ((instructions (if (listp to-mock) to-mock (list to-mock))))
+  (let ((instructions (if (listp instructions) instructions (list instructions))))
 
     `(cl-letf* ((bydi--history ,(if history history '(bydi--make-table)))
                 (bydi--suspects (bydi--make-table))
@@ -129,7 +152,7 @@ functions when stacking `bydi--mock' forms."
               ',(bydi--collect instructions :othertimes))
 
              (bydi--setup)
-             ,@(bydi--safe-body body))
+             ,@(bydi--safe-body form))
 
          (bydi--teardown)))))
 
